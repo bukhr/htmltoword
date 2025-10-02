@@ -1,14 +1,19 @@
 module Htmltoword
   class Document
     include XSLTHelper
+    # 1 cm = 567 twips (Unidad de medida de Word)
+    CM_TO_TWIPS = 567
+    DEFAULT_HEADER_FOOTER_TWIPS = 708
+    DEFAULT_GUTTER_TWIPS = 0
 
     class << self
       include TemplatesHelper
-      def create(content, template_name = nil, extras = false)
+      def create(content, template_name = nil, extras = false, margins: nil)
         template_name += extension if template_name && !template_name.end_with?(extension)
         document = new(template_file(template_name))
         document.replace_files(content, extras)
-        document.generate
+        docx_content = document.generate
+        margins ? apply_margins_to_docx(docx_content, margins) : docx_content
       end
 
       def create_and_save(content, file_path, template_name = nil, extras = false)
@@ -42,6 +47,55 @@ module Htmltoword
 
       def content_types_xml_file
         '[Content_Types].xml'
+      end
+
+      private
+
+      def apply_margins_to_docx(docx_content, margins_cm)
+        margin_twips = margins_cm.transform_values { |cm| (cm.to_f * CM_TO_TWIPS).to_i }
+        Tempfile.create(['htmltoword_input', '.docx']) do |input_file|
+          input_file.binmode
+          input_file.write(docx_content)
+          input_file.close
+
+          Zip::File.open(input_file.path) do |zip|
+            entry = zip.find_entry('word/document.xml')
+            xml_content = entry.get_input_stream.read
+            modified_xml = modify_document_xml_margins(xml_content, margin_twips)
+            zip.get_output_stream(entry.name) { |out| out.write(modified_xml) }
+          end
+
+          File.binread(input_file.path)
+        end
+      end
+
+      def modify_document_xml_margins(xml_content, margin_twips)
+        doc = Nokogiri::XML(xml_content)
+        # Namespace XML de Word (requerido para consultas XPath).
+        # Define el prefijo "w:" para buscar elementos en el XML interno del documento Word.
+        # Ejemplo: "w:sectPr" se busca como <w:sectPr> dentro del archivo word/document.xml
+        namespaces = { 'w' => 'http://schemas.openxmlformats.org/wordprocessingml/2006/main' }
+
+        # XPath para encontrar nodos <w:sectPr> (Section Properties)
+        # que contienen la configuración de márgenes y propiedades de página
+        # según especificación WordprocessingML de Microsoft
+        doc.xpath('//w:sectPr', namespaces).each do |sect_pr|
+          pg_mar = sect_pr.at_xpath('w:pgMar', namespaces)
+
+          unless pg_mar
+            pg_mar = Nokogiri::XML::Node.new('w:pgMar', doc)
+            pg_mar.namespace = sect_pr.namespace
+            sect_pr.add_child(pg_mar)
+          end
+
+          margin_sides = [:top, :right, :bottom, :left]
+          margin_sides.each { |side| pg_mar["w:#{side}"] = margin_twips[side].to_s }
+          pg_mar['w:header'] ||= DEFAULT_HEADER_FOOTER_TWIPS.to_s
+          pg_mar['w:footer'] ||= DEFAULT_HEADER_FOOTER_TWIPS.to_s
+          pg_mar['w:gutter'] ||= DEFAULT_GUTTER_TWIPS.to_s
+        end
+
+        doc.to_xml(save_with: Nokogiri::XML::Node::SaveOptions::AS_XML)
       end
     end
 
