@@ -170,6 +170,20 @@ Examples:
 <img src="http://placehold.it/250x100.png" data-height="150px" style="width:250px; height:100px">
 ```
 
+#### Resolving images before they are downloaded
+
+`image_resolver` is called with the `src` of every remote image before the document is generated. Return `nil` to download the image as usual, or a Hash with the bytes to embed in `:data` and, optionally, their extension in `:ext`. When the extension changes, the relation inside the document is updated so Word opens the new format. This is useful to serve formats Word cannot render (for example WebP) in a format it can:
+
+```ruby
+Htmltoword.configure do |config|
+  config.image_resolver = lambda do |src|
+    next unless src.end_with?('.webp')
+
+    { data: MyImageService.png_for(src), ext: 'png' }
+  end
+end
+```
+
 ## Contributing / Extending
 
 Word docx files are essentially just a zipped collection of xml files and resources.

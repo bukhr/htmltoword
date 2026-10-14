@@ -1,4 +1,13 @@
 CHANGELOG
+Version 1.2.0
+* Add Htmltoword.config.image_resolver to supply the bytes of remote images before they are downloaded
+* Require active_support/core_ext/object/blank so the gem works outside Rails
+* Point each image relation to the file stored in word/media
+
+Version 1.1.2 (bukhr fork, based on upstream 1.1.1)
+* Add margins: option to Document.create to set the page margins in centimeters (top, right, bottom, left)
+* Add watermark: option to Document.create to place a base64 PNG or JPEG image as a page header watermark
+
 Version 0.6.0
 * Improve support for inline elements
 * Add basic support for section and article elements
