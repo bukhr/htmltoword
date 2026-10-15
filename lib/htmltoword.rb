@@ -2,6 +2,7 @@
 require 'nokogiri'
 require 'zip'
 require 'open-uri'
+require 'active_support/core_ext/object/blank'
 require_relative 'htmltoword/configuration'
 
 module Htmltoword
